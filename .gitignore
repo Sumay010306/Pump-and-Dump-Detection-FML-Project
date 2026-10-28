@@ -1,0 +1,32 @@
+# Python environments and caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Credentials and machine-specific settings
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+.vscode/
+.idea/
+*.log
+.DS_Store
+Thumbs.db
+
+# Downloaded market data and source archives (rebuild with pumpwatch.data)
+data/raw/
+data/candles.csv.gz
+
+# Trained models and full prediction history (rebuild with pumpwatch.train)
+artifacts/*.joblib
+artifacts/predictions.csv.gz
+
+# Generated standalone report bundles the Plotly library
+Research_Report.html
+
+# Distribution archives
+*.zip
