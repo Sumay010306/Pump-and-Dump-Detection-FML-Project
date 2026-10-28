@@ -1,0 +1,17 @@
+Verification completed 28 October 2026
+
+- 17 unit/integration tests passed.
+- All six Streamlit screens rendered without exceptions.
+- Historical replay slider interaction passed.
+- Analysis notebook executed successfully, all code cells.
+- Live dashboard inspected in the browser.
+- Original archive SHA-256 checksums verified for 625 usable files.
+- Prefix replay scores equal full-history scores for the same timestamps.
+- Saved model reload reproduces scores.
+- OHLCV-only uploads select the separately fitted fallback.
+
+Evaluation uses real market candles and independent research labels.
+Synthetic fixtures are used exclusively for software tests.
+
+Known data limitation: 8 YOYOWBTC archives unavailable, excluding 4 events.
+Scores are uncalibrated and results do not establish current-market performance.

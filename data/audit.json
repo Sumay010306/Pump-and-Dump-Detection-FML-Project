@@ -1,0 +1,30 @@
+{
+  "research_positive_rows": 317,
+  "binance_announcement_rows": 520,
+  "unique_announcements": 338,
+  "matched_onsets": 317,
+  "unmatched_onsets": 0,
+  "archives_requested": 633,
+  "archives_usable": 625,
+  "candle_rows": 896896,
+  "coins": 84,
+  "first_candle": "2017-12-27 00:00:00+00:00",
+  "last_candle": "2021-01-18 23:59:00+00:00",
+  "label_policy": "Manually labeled 25-second onset mapped to its minute; onset minute and next two minutes positive. Other candles within 60 minutes of known onsets/announcements excluded from binary metrics.",
+  "collection_policy": "Full UTC event day and same pair seven days earlier. First 60 minutes of each disconnected segment are warm-up; no gap filling.",
+  "sources": [
+    "https://raw.githubusercontent.com/SystemsLab-Sapienza/pump-and-dump-dataset/master/",
+    "https://github.com/binance/binance-public-data"
+  ],
+  "research_file_hashes": {
+    "features_25S.csv.gz": "0d43d1d396ef13778ab2cd2a9f047034713f9066bdc07c23efce335da8185331",
+    "LICENSE": "e81234099e71b667dae61b2580d49b7bd567d61492f909fd376bc2cca1e2a858",
+    "pump_telegram.csv": "7ca4d2ac21b02888a269af6dd8a56415074d86f1e5e51e5de314f536a6a3b593"
+  },
+  "usable_event_coverage": {
+    "documented": 317,
+    "complete": 313,
+    "partial": 0,
+    "unavailable": 4
+  }
+}
