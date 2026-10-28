@@ -1,3 +1,4 @@
+"""Check saved research models against real historical sample candles."""
 import json
 import unittest
 import joblib
@@ -11,6 +12,7 @@ from pumpwatch.inference import predict, explain
 class TrainedIntegrationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        # Load once: all tests compare the same model and historical sample.
         cls.bundle=joblib.load(ROOT/'artifacts/best_model.joblib')
         cls.candles=pd.read_csv(ROOT/'examples/sample_candles.csv')
 
@@ -25,7 +27,7 @@ class TrainedIntegrationTests(unittest.TestCase):
         b,_=predict(self.candles,joblib.load(ROOT/'artifacts/best_model.joblib'))
         np.testing.assert_array_equal(a.risk_score,b.risk_score)
 
-    def test_ohlcv_fallback_and_explanation(self):
+    def test_ohlcv_only_comparison_and_explanation(self):
         core=self.candles.drop(columns=['trades','taker_buy_volume'])
         p,q=predict(core,self.bundle)
         self.assertEqual(q['feature_mode'],'OHLCV only')

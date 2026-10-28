@@ -1,6 +1,6 @@
 """Local Streamlit research dashboard. Run: python -m streamlit run app.py"""
-from pathlib import Path
 import json
+from html import escape
 
 import joblib
 import numpy as np
@@ -12,8 +12,10 @@ import streamlit as st
 
 from pumpwatch.data import ROOT, DATA
 from pumpwatch.inference import predict, explain
+from pumpwatch.dashboard_text import SITE, PAGES, TEXT, MODEL_EXPLANATIONS
 
-st.set_page_config(page_title="PumpWatch | Market research", page_icon="◈", layout="wide")
+# Page layout and colors; editable wording lives in pumpwatch/dashboard_text.py.
+st.set_page_config(page_title=SITE["browser_title"], page_icon="◈", layout="wide")
 st.markdown("""<style>
 .stApp {background:#09121d;color:#e6edf5} h1,h2,h3 {letter-spacing:-.035em}
 [data-testid="stSidebar"] {background:#101d2c}
@@ -23,6 +25,7 @@ st.markdown("""<style>
 .stButton>button {border-radius:8px}
 </style>""", unsafe_allow_html=True)
 
+# A source-only clone shows build instructions until its historical artifacts exist.
 ART = ROOT / "artifacts"
 required_artifacts = [ART/'report.json', ART/'best_model.joblib', ART/'predictions.csv.gz',
                       DATA/'candles.csv.gz', DATA/'events.csv', DATA/'audit.json']
@@ -35,17 +38,20 @@ if not all(path.exists() for path in required_artifacts):
 
 @st.cache_resource
 def load_bundle():
+    """Cache the fitted classifier; opening a page never retrains it."""
     # Only load the trusted model shipped with this project; never accept model uploads.
     return joblib.load(ART / 'best_model.joblib')
 
 
 @st.cache_data
 def load_reports():
+    """Read the recorded evaluation and acquisition audit for the current run."""
     return json.loads((ART / 'report.json').read_text()), json.loads((DATA / 'audit.json').read_text())
 
 
 @st.cache_data
 def load_predictions():
+    """Load saved historical scores once and restore UTC timestamp types."""
     d = pd.read_csv(ART / 'predictions.csv.gz')
     for c in ['timestamp', 'prediction_time']:
         d[c] = pd.to_datetime(d[c], utc=True)
@@ -54,6 +60,7 @@ def load_predictions():
 
 @st.cache_data
 def load_candles():
+    """Load the fixed historical dataset for event charts and prefix replay."""
     d = pd.read_csv(DATA / 'candles.csv.gz')
     d['timestamp'] = pd.to_datetime(d.timestamp, utc=True)
     return d
@@ -65,6 +72,7 @@ best = report['models'][report['selected_model']]['test']
 
 
 def chart(d, threshold, onset=None):
+    """Align price, volume and risk panels without changing any prediction."""
     fig = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=.04, row_heights=[.48,.24,.28])
     fig.add_trace(go.Candlestick(x=d.timestamp, open=d.open, high=d.high, low=d.low, close=d.close,
                                 name='Price · BTC', increasing_line_color='#50d6b1', decreasing_line_color='#ff7a88'), row=1,col=1)
@@ -84,14 +92,15 @@ def chart(d, threshold, onset=None):
     return fig
 
 
-def detail(row, core=False):
-    threshold = bundle['core_threshold'] if core else bundle['threshold']
+def detail(row):
+    """Explain a historical score through one-feature median substitutions."""
+    threshold = bundle['threshold']
     a,b,c=st.columns(3)
     a.metric('Risk score',f"{row.risk_score:.6f}")
     b.metric('Decision','Pump alert' if row.risk_score >= threshold else 'No alert')
     c.metric('Alert threshold',f'{threshold:.6f}')
     st.caption(f"Available at {row.prediction_time} · Uncalibrated score, not a probability or proof of manipulation.")
-    explanation=explain(row,bundle,core)
+    explanation=explain(row,bundle)
     top=explanation.head(8).sort_values('score_change')
     fig=px.bar(top,x='score_change',y='feature',orientation='h',color='score_change',
                color_continuous_scale=['#6c9de9','#50d6b1'],template='plotly_dark')
@@ -103,39 +112,51 @@ def detail(row, core=False):
         st.dataframe(explanation,hide_index=True,width='stretch')
 
 
-st.sidebar.markdown('## ◈ PumpWatch')
-st.sidebar.caption('CRYPTOCURRENCY MARKET RESEARCH')
-page=st.sidebar.radio('Workspace',['Overview','Historical explorer','CSV analysis','Model comparison','Historical replay','Data & methodology'])
+def page_explanation(page_key):
+    """Briefly connect each page's ML method to what its results mean."""
+    st.caption('**Method:** ' + PAGES[page_key]['method'])
+    st.caption('**What this means:** ' + PAGES[page_key]['meaning'])
+
+
+# Stable navigation IDs let readers rename displayed labels without breaking routing.
+st.sidebar.markdown('## ' + SITE['sidebar_title'])
+st.sidebar.caption(SITE['sidebar_caption'])
+page=st.sidebar.radio(SITE['navigation_label'],list(PAGES),format_func=lambda key:PAGES[key]['label'])
 st.sidebar.divider()
 st.sidebar.markdown(f"**Selected model**  \n{report['selected_model']}")
-st.sidebar.caption('Historical research · one-minute candles · UTC')
-st.sidebar.caption('No trading actions or live market feed.')
+st.sidebar.caption(SITE['sidebar_context'])
+st.sidebar.caption(SITE['sidebar_scope'])
 
-if page == 'Overview':
-    st.markdown('<div class="eyebrow">PATTERNS, EVIDENCE, EXPLANATIONS</div>',unsafe_allow_html=True)
-    st.title('Spot the surge. Understand the signal.')
-    st.markdown('<p class="subtle">Explore documented pump events, compare four machine-learning models, and inspect the evidence behind every alert.</p>',unsafe_allow_html=True)
+# OVERVIEW: summarize held-out metrics; these values come from report.json.
+if page == 'overview':
+    st.markdown(f'<div class="eyebrow">{escape(TEXT["overview_eyebrow"])}</div>',unsafe_allow_html=True)
+    st.title(PAGES[page]['title'])
+    st.markdown(f'<p class="subtle">{escape(TEXT["overview_subtitle"])}</p>',unsafe_allow_html=True)
+    page_explanation(page)
     a,b,c,d=st.columns(4)
     a.metric('Documented onsets',audit['matched_onsets'])
     b.metric('Trading pairs',audit['coins'])
     c.metric('Test precision',f"{best['precision']:.1%}")
     d.metric('Test event recall',f"{report['event_evaluation']['recall']:.1%}")
-    st.info('Scores identify similarity to labeled pump activity. They are not calibrated probabilities. Results describe historical event/comparison days, not all cryptocurrency trading.')
+    st.info(TEXT['score_notice'])
     left,right=st.columns([1.6,1])
     with left:
-        st.subheader('Four models. One held-out comparison.')
+        st.subheader(TEXT['overview_comparison'])
         rows=[{'Model':n,'F1':m['test']['f1'],'Precision':m['test']['precision'],'Recall':m['test']['recall']} for n,m in report['models'].items()]
         fig=px.bar(pd.DataFrame(rows),x='Model',y=['F1','Precision','Recall'],barmode='group',template='plotly_dark',color_discrete_sequence=['#50d6b1','#6c9de9','#f8c86a'])
         fig.update_layout(paper_bgcolor='#09121d',plot_bgcolor='#101d2c',height=360,yaxis_range=[0,1])
         st.plotly_chart(fig,width='stretch')
     with right:
-        st.subheader('Start exploring')
-        st.markdown('**Historical explorer** — inspect real price spikes and model alerts.\n\n**CSV analysis** — score your own one-minute data.\n\n**Historical replay** — reveal candles sequentially, with no future data supplied to the detector.\n\n**Model comparison** — review errors, precision–recall curves, and baselines.')
+        st.subheader(TEXT['overview_navigation'])
+        st.markdown(TEXT['overview_links'])
     st.caption(f"Dataset: {audit['first_candle']} to {audit['last_candle']} · Model selected on validation F1, then evaluated on the untouched test period.")
 
-elif page in ['Historical explorer','Historical replay']:
-    replay = page == 'Historical replay'
-    st.title('Replay the market' if replay else 'Explore a documented event')
+# HISTORICAL VIEWS: use the same selected model and fixed source events.
+elif page in ['explorer','replay']:
+    replay = page == 'replay'
+    st.title(PAGES[page]['title'])
+    page_explanation(page)
+    st.caption(MODEL_EXPLANATIONS[report['selected_model']])
     events=pd.read_csv(DATA/'events.csv')
     events['onset']=pd.to_datetime(events.onset,utc=True)
     outcomes=pd.read_csv(ART/'event_results.csv')
@@ -176,32 +197,10 @@ elif page in ['Historical explorer','Historical replay']:
             moment=st.select_slider('Inspect a candle',options=times,value=times[default],format_func=lambda t:t.strftime('%H:%M UTC'))
             detail(scored[scored.timestamp==moment].iloc[0])
 
-elif page == 'CSV analysis':
-    st.title('Analyze your candles')
-    st.write('Upload at least 61 consecutive, completed one-minute candles for a single trading pair.')
-    st.caption('Required: timestamp, open, high, low, close, volume. Optional: trades, taker_buy_volume. Timestamps are candle open times in UTC or epoch seconds/ms/us.')
-    example=ROOT/'examples'/'sample_candles.csv'
-    if example.exists():
-        st.download_button('Download real-data example CSV',example.read_bytes(),'sample_candles.csv','text/csv')
-    uploaded=st.file_uploader('Choose a candle CSV',type=['csv'])
-    if uploaded is not None:
-        try:
-            frame=pd.read_csv(uploaded)
-            result,quality=predict(frame,bundle)
-            st.success(f"Scored {len(result):,} candles · {quality['feature_mode']} · {quality['gaps']} gaps detected")
-            if quality['feature_mode']=='OHLCV only':
-                st.info('Using the separately trained OHLCV-only fallback model and its own validation-selected threshold.')
-            plot=result.tail(500)
-            st.plotly_chart(chart(plot,quality['threshold']),width='stretch')
-            times=result.timestamp.tolist()
-            selected=st.select_slider('Inspect a prediction',options=times,value=times[-1])
-            detail(result[result.timestamp==selected].iloc[0],core=quality['feature_mode']=='OHLCV only')
-            st.download_button('Download predictions',result[['prediction_time','symbol','risk_score','alert']].to_csv(index=False),'pumpwatch_predictions.csv','text/csv')
-        except (ValueError,KeyError,pd.errors.ParserError) as exc:
-            st.error(str(exc))
-
-elif page == 'Model comparison':
-    st.title('Evidence before confidence')
+# MODEL COMPARISON: switch only the displayed partition, not the fitted models.
+elif page == 'comparison':
+    st.title(PAGES[page]['title'])
+    page_explanation(page)
     st.caption(report['selection'])
     split=st.radio('Evaluation period',['test','validation'],horizontal=True)
     rows=[]
@@ -210,21 +209,24 @@ elif page == 'Model comparison':
         rows.append({'Model':name,**{k:m[k] for k in ['precision','recall','f1','average_precision','roc_auc','threshold']}})
     st.dataframe(pd.DataFrame(rows).set_index('Model').style.format('{:.4f}'),width='stretch')
     model=st.selectbox('Inspect model',list(report['models']))
+    st.caption(MODEL_EXPLANATIONS[model])
     left,right=st.columns(2)
     with left:
-        st.subheader('Confusion matrix')
+        st.subheader(TEXT['confusion_title'])
+        st.caption('Rows are known labels; columns are model decisions. Diagonal cells are correct predictions; off-diagonal cells are false alarms or missed pump windows.')
         cm=report['models'][model][split]['confusion_matrix']
         fig=px.imshow(cm,x=['Predicted normal','Predicted pump'],y=['Labeled normal','Labeled pump'],text_auto=True,color_continuous_scale='Teal',template='plotly_dark')
         fig.update_layout(paper_bgcolor='#09121d',height=340)
         st.plotly_chart(fig,width='stretch')
     with right:
-        st.subheader('Test precision–recall curves')
+        st.subheader(TEXT['pr_title'])
+        st.caption('Each curve varies the alert threshold on the test period. Higher precision at the same recall indicates a better tradeoff. These curves always show test data, even when the table displays validation.')
         fig=go.Figure()
         for n,r in report['models'].items():
             fig.add_trace(go.Scatter(x=r['pr_curve']['recall'],y=r['pr_curve']['precision'],name=n))
         fig.update_layout(template='plotly_dark',paper_bgcolor='#09121d',plot_bgcolor='#101d2c',height=340,xaxis_title='Recall',yaxis_title='Precision',legend=dict(orientation='h',y=-.3))
         st.plotly_chart(fig,width='stretch')
-    st.subheader('Event detection and false alerts · selected model, test period')
+    st.subheader(TEXT['event_title'])
     ev=report['event_evaluation']
     a,b,c,d=st.columns(4)
     a.metric('Detected events',f"{ev['detected']} / {ev['events']}")
@@ -233,19 +235,22 @@ elif page == 'Model comparison':
     d.metric('False episodes / coin-day',f"{ev['false_alert_episodes_per_coin_day']:.2f}")
     st.caption(ev['scope']+' Consecutive alert minutes count as one episode; ambiguous periods are excluded.')
     st.dataframe(pd.read_csv(ART/'event_results.csv'),hide_index=True,width='stretch')
-    st.subheader('Reference methods · test period')
+    st.subheader(TEXT['baseline_title'])
     st.dataframe(pd.DataFrame({n:{k:m[k] for k in ['precision','recall','f1','average_precision']} for n,m in report['baselines'].items()}).T,width='stretch')
     st.caption('Average precision for the binary rule has only two score levels. The always-normal ranking baseline equals the positive prevalence.')
-    st.subheader('Global feature importance')
+    st.subheader(TEXT['importance_title'])
+    st.caption('Permutation importance shuffles one feature in validation data and measures the drop in average precision. Larger drops suggest greater model reliance; correlated features can share importance.')
     importance=pd.read_csv(ART/'importance.csv').head(12).sort_values('importance')
     fig=px.bar(importance,x='importance',y='feature',orientation='h',error_x='std',template='plotly_dark',color_discrete_sequence=['#50d6b1'])
     fig.update_layout(paper_bgcolor='#09121d',plot_bgcolor='#101d2c',xaxis_title='Validation average-precision decrease after permutation',yaxis_title='')
     st.plotly_chart(fig,width='stretch')
-    with st.expander('OHLCV-only fallback and unseen-coin results'):
+    with st.expander('OHLCV-only comparison and unseen-coin results'):
         st.json({'OHLCV-only test':report['ohlcv_only_test'],'Unseen coins':report['unseen_coins']})
 
+# METHODOLOGY: document how labels, partitions and data exclusions were formed.
 else:
-    st.title('Data & methodology')
+    st.title(PAGES[page]['title'])
+    page_explanation(page)
     st.write('Research labels are independently published manual onset annotations. Raw one-minute candles come from the corresponding Binance BTC pairs.')
     st.dataframe(pd.DataFrame(report['splits']).T,width='stretch')
     st.write('**Labels:** onset minute and next two minutes are positive. Other minutes within ±60 minutes of any known onset or announcement are excluded from binary evaluation.')

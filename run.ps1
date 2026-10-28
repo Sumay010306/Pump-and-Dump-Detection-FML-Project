@@ -1,3 +1,5 @@
+# Start the local historical-evaluation dashboard from this project directory.
+# Prefer the project's virtual environment when one has been created.
 $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath $PSScriptRoot
 $projectPython = Join-Path $PSScriptRoot '.venv/Scripts/python.exe'

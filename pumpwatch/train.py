@@ -26,6 +26,7 @@ ARTIFACTS = ROOT / "artifacts"
 
 
 def scores(model, X):
+    """Return comparable score ranges without asserting probability calibration."""
     if hasattr(model, "predict_proba"):
         return model.predict_proba(X)[:, 1]
     # Monotonic mapping for SVM ranking and thresholding; deliberately NOT calibrated.
@@ -33,6 +34,7 @@ def scores(model, X):
 
 
 def choose_threshold(y, s):
+    """Choose the maximum-F1 threshold using validation labels and scores only."""
     p, r, t = precision_recall_curve(y, s)
     f = 2 * p[:-1] * r[:-1] / np.maximum(p[:-1] + r[:-1], 1e-15)
     best = int(np.argmax(f))
@@ -40,6 +42,7 @@ def choose_threshold(y, s):
 
 
 def metrics(y, s, threshold):
+    """Measure ranking and fixed-threshold performance on a labeled partition."""
     pred = np.asarray(s) >= threshold
     return {"precision": float(precision_score(y, pred, zero_division=0)),
             "recall": float(recall_score(y, pred, zero_division=0)),
@@ -51,6 +54,7 @@ def metrics(y, s, threshold):
 
 
 def split_by_time(d, events):
+    """Reserve later event dates for validation/test and purge boundary overlap."""
     days = sorted(pd.to_datetime(events.onset, utc=True).dt.floor("D").unique())
     if len(days) < 10:
         raise ValueError("Need at least ten independent event dates for chronological evaluation.")
@@ -67,6 +71,7 @@ def split_by_time(d, events):
 
 
 def train():
+    """Fit four model families, select on validation, then evaluate once on test."""
     ARTIFACTS.mkdir(exist_ok=True)
     candles = pd.read_csv(DATA / "candles.csv.gz")
     candles["timestamp"] = pd.to_datetime(candles.timestamp, utc=True)
@@ -86,6 +91,7 @@ def train():
     X, y = fit[FEATURES], fit.target
     xv, yv = parts["validation"][FEATURES], parts["validation"].target
     xt, yt = parts["test"][FEATURES], parts["test"].target
+    # Small reproducible search: every candidate sees identical historical partitions.
     candidates = {
         "Logistic Regression": [make_pipeline(StandardScaler(), LogisticRegression(C=c, class_weight="balanced", max_iter=2000, random_state=SEED)) for c in [.1, 1]],
         "Random Forest": [RandomForestClassifier(n_estimators=160, max_depth=depth, min_samples_leaf=3, class_weight="balanced", n_jobs=4, random_state=SEED) for depth in [8, 16]],
@@ -131,6 +137,7 @@ def train():
     bundle = {"model": best_model, "features": FEATURES, "threshold": threshold, "name": winner,
               "score_kind": "uncalibrated risk score", "reference": training[FEATURES].median().to_dict(),
               "feature_schema": "one-minute-v1", "seed": SEED}
+    # Preserve an OHLCV-only comparison to measure the role of trade-activity features.
     core_features = [n for n in FEATURES if n not in ['trade_z', 'mean_trade_size', 'buy_share', 'activity_available']]
     core_model = clone(best_model)
     if winner == 'Gradient Boosting':

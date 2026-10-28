@@ -20,6 +20,7 @@ from .train import ARTIFACTS, SEED, scores, choose_threshold, metrics
 
 
 def generate():
+    """Summarize existing results; do not select a new model using test outcomes."""
     report=json.loads((ARTIFACTS/'report.json').read_text())
     audit=json.loads((DATA/'audit.json').read_text())
     d=pd.read_csv(ARTIFACTS/'predictions.csv.gz')
@@ -101,7 +102,7 @@ def generate():
     document+=f'''<h2>6. Errors and limitations</h2><p>False-positive and false-negative windows are exported in <code>artifacts/errors.csv</code>; event-level outcomes are below. Missed and late detections remain part of the results. No performance target was imposed after seeing test data.</p>{outcome.to_html(index=False,border=0)}
 <p>Limitations: old market regimes; imperfect manual timing; one-minute resolution; missing YOYOW data; no order-book features; a finite number of independent events; no confidence intervals or deployment-wide prevalence estimate; threshold selection on one validation period. No claim of advance prediction is made. A close-time alert can occur after the price move has started. False alerts may include unrecorded events.</p>
 <p>The main model uses trade activity where available. An independently fitted OHLCV-only fallback uses the selected algorithm and a separately selected validation threshold; its test metrics are recorded separately. Unseen-coin results are also available in the evaluation JSON. Local explanations replace each feature with its training median one at a time; they are non-additive sensitivity measurements, not causal explanations.</p>
-<h2>7. Reproduction and demonstration</h2><p>Run <code>python -m pumpwatch.data</code>, <code>python -m pumpwatch.train</code>, then <code>python -m pumpwatch.reporting</code>. Start the dashboard with <code>python -m streamlit run app.py</code>. The included trained artifacts allow an offline demonstration without retraining. Use Historical explorer, Model comparison, CSV analysis and Historical replay. Setup, tests and commands are in README.md.</p>
+<h2>7. Reproduction and demonstration</h2><p>Run <code>python -m pumpwatch.data</code>, <code>python -m pumpwatch.train</code>, then <code>python -m pumpwatch.reporting</code>. Start the dashboard with <code>python -m streamlit run app.py</code>. The included trained artifacts allow an offline demonstration without retraining. Use Historical explorer, Model comparison and Historical replay. Setup, tests and commands are in README.md.</p>
 <h2>References</h2><p>La Morgia, Mei, Sassi and Stefa (2020), <i>Pump and Dumps in the Bitcoin Era: Real Time Detection of Cryptocurrency Market Manipulations</i>, ICCCN, DOI 10.1109/ICCCN49398.2020.9209660. <a href="https://github.com/SystemsLab-Sapienza/pump-and-dump-dataset">Dataset and source license</a>. <a href="https://github.com/binance/binance-public-data">Binance archive documentation and terms</a>.</p></html>'''
     (ROOT/'Research_Report.html').write_text(document,encoding='utf-8')
     notebook=nbf.v4.new_notebook()
@@ -116,6 +117,10 @@ def generate():
            nbf.v4.new_code_cell("pd.read_csv(root / 'artifacts/model_comparison.csv')"),
            nbf.v4.new_code_cell("pd.read_csv(root / 'artifacts/event_results.csv')"),
            nbf.v4.new_markdown_cell('## Interpretation\nScores are uncalibrated. Event-conditioned sampling, historical regimes and uncertain labels limit generalization. See Research_Report.html and artifacts/errors.csv for the error analysis.')]
+    # Include educational code comments when the notebook is regenerated.
+    code_comments = ['Load saved historical predictions and inspect the chronological partitions.', 'Count windows by partition and class; -1 denotes excluded ambiguous windows.', 'Compare feature medians using training data only, avoiding test-informed exploration.', 'Visualize volume anomalies in a reproducible sample of training windows.', 'Display held-out test metrics for the four models without fitting again.', 'Inspect independent-event detections and close-time delays in the test period.']
+    for cell, comment in zip([c for c in cells if c.cell_type == "code"], code_comments):
+        cell.source = "# " + comment + "\n" + cell.source
     notebook.cells=cells
     nbf.write(notebook,ROOT/'Exploratory_Analysis.ipynb')
     # Real held-out event example includes sufficient preceding warm-up context.

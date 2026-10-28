@@ -23,6 +23,7 @@ DESCRIPTIONS = {
 
 
 def _segment(d: pd.DataFrame) -> pd.DataFrame:
+    """Compute features within one uninterrupted sequence of one-minute candles."""
     f = pd.DataFrame(index=d.index)
     r = d.close.pct_change(fill_method=None)
     for n in [1, 5, 15]:
@@ -53,6 +54,7 @@ def _segment(d: pd.DataFrame) -> pd.DataFrame:
 
 
 def engineer(candles: pd.DataFrame) -> pd.DataFrame:
+    """Group continuous history and mark rows with enough past context for scoring."""
     d = candles.copy().sort_values(["symbol", "timestamp"]).reset_index(drop=True)
     # Every discontinuity restarts all rolling windows, preventing gap bridging.
     breaks = d.symbol.ne(d.symbol.shift()) | d.timestamp.diff().ne(pd.Timedelta(minutes=1))
@@ -66,6 +68,7 @@ def engineer(candles: pd.DataFrame) -> pd.DataFrame:
 
 
 def label_windows(frame: pd.DataFrame, events: pd.DataFrame, announcements: pd.DataFrame) -> pd.DataFrame:
+    """Attach research targets: 1=pump, 0=no known event, -1=excluded ambiguity."""
     d = frame.copy()
     d["target"] = 0
     d["event_id"] = ""

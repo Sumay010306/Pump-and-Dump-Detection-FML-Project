@@ -6,7 +6,8 @@ from .features import engineer, DESCRIPTIONS
 from .train import scores
 
 
-def predict(frame, bundle, symbol="UPLOADED"):
+def predict(frame, bundle, symbol="HISTORICAL"):
+    """Score an in-memory historical prefix for replay; no file upload UI is exposed."""
     d, quality = validate_candles(frame)
     if "symbol" not in d:
         d["symbol"] = symbol
@@ -35,6 +36,7 @@ def explain(row, bundle, core=False):
     model = bundle['core_model'] if core else bundle['model']
     x = pd.DataFrame([{n: float(row[n]) for n in names}])
     original = float(scores(model, x)[0])
+    # Substitute each feature separately so the explanation remains non-additive.
     changed = pd.concat([x] * len(names), ignore_index=True)
     for i, name in enumerate(names):
         changed.loc[i, name] = bundle['reference'][name]

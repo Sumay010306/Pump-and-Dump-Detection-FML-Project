@@ -9,6 +9,7 @@ from pumpwatch.train import split_by_time, choose_threshold
 
 
 def fixture(n=180):
+    """Construct predictable candles for software checks, never for ML evaluation."""
     close=100+np.arange(n)*.01
     return pd.DataFrame({'timestamp':pd.date_range('2020-01-01',periods=n,freq='min',tz='UTC'),
         'open':close,'high':close+.02,'low':close-.02,'close':close,
@@ -17,6 +18,7 @@ def fixture(n=180):
 
 
 class PipelineTests(unittest.TestCase):
+    # These checks protect causal features, data validity and chronological separation.
     def test_future_cannot_change_past_features(self):
         d=fixture();a=engineer(d)
         changed=d.copy(); changed.loc[100:,'volume']=999999

@@ -22,6 +22,7 @@ REQUIRED = ["timestamp", "open", "high", "low", "close", "volume"]
 
 
 def fetch(url: str) -> bytes:
+    """Download a public source with bounded retries; propagate persistent errors."""
     for attempt in range(3):
         try:
             r = requests.get(url, timeout=45)
@@ -45,7 +46,7 @@ def validate_candles(frame: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
     if missing:
         raise ValueError("Missing columns: " + ", ".join(sorted(missing)))
     if "symbol" in d and d.symbol.nunique() != 1:
-        raise ValueError("Upload exactly one trading pair at a time.")
+        raise ValueError("Provide exactly one trading pair at a time.")
     if d.empty:
         raise ValueError("No candle records found.")
     t = d.timestamp
@@ -92,6 +93,7 @@ def validate_candles(frame: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
 
 
 def acquire() -> None:
+    """Build the fixed research dataset and record every source/exclusion."""
     raw = DATA / "raw"
     raw.mkdir(parents=True, exist_ok=True)
     for name in ["pump_telegram.csv", "labeled_features/features_25S.csv.gz", "LICENSE"]:
@@ -126,6 +128,7 @@ def acquire() -> None:
     archive.mkdir(exist_ok=True)
 
     def download(job):
+        """Verify one daily archive before accepting its candles into the dataset."""
         pair, day = job
         name = f"{pair}-1m-{day}.zip"
         path = archive / name

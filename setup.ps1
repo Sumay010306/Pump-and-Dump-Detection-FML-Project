@@ -1,3 +1,5 @@
+# Create an isolated Python environment and install the pinned dependencies.
+# Dataset acquisition and training remain separate, explicit steps in README.md.
 $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath $PSScriptRoot
 python -m venv .venv
